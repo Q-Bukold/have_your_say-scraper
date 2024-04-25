@@ -5,9 +5,9 @@ from sqlalchemy import update
 from sqlalchemy.dialects.mysql import insert
 from time import gmtime, strftime
 
-from src.custom_logging import log
+from src.helpers.custom_logging import log
 from src.database.database_structure import Stages, Attachments, Feedbacks
-from .hys_portal_scraper import Portal_Scraper
+from ..hys_portal_scraper import Portal_Scraper
 
 # for pdf to txt conversion
 import multiprocessing
@@ -20,8 +20,8 @@ from tqdm.notebook import tqdm
 from src.pdf_to_txt.clean_extract import convert_attachments_to_txt, extract_text_from_pdf
 
 class Attachment_Scraper(Portal_Scraper):
-    def __init__(self, connection: str, wait_time: int = 30, is_test: bool = False, document_id : str = None) -> None:
-        super().__init__(connection, wait_time, is_test)
+    def __init__(self, connection: str, wait_time: int = 30, document_id : str = None) -> None:
+        super().__init__(connection, wait_time)
     
         self.Session, self.engine = super().init_database_session()
         self.WAIT_TIME = wait_time

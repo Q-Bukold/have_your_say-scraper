@@ -7,16 +7,16 @@ from time import gmtime, strftime
 from sqlalchemy import update
 from time import gmtime, strftime
 
-from src.custom_logging import log
+from src.helpers.custom_logging import log
 
 from src.database.database_structure import Stages, Attachments, Feedbacks
 
-from .hys_portal_scraper import Portal_Scraper
+from ..hys_portal_scraper import Portal_Scraper
 from .hys_scraper import HYS_Scraper
 
 class Feedback_Scraper(Portal_Scraper):
-    def __init__(self, connection: str, stage_id : str = None, wait_time: int = 30, is_test: bool = False) -> None:
-        Portal_Scraper.__init__(self, connection, wait_time, is_test)  # explicit calls without super
+    def __init__(self, connection: str, stage_id : str = None, wait_time: int = 30) -> None:
+        Portal_Scraper.__init__(self, connection, wait_time)  # explicit calls without super
         
         self.stage_id = stage_id
         
@@ -157,8 +157,6 @@ class Feedback_Scraper(Portal_Scraper):
         # EC misspelled Instittution, fix it.
         if d["user_type"] == "ACADEMIC_RESEARCH_INSTITTUTION":
             d["user_type"] = "ACADEMIC_RESEARCH_INSTITUTION"
-        
-
         
         # save how many attachments the feedback has in dictionary and upsert the attachment metadata to Attachments Table
         list_of_attachments = f["attachments"]

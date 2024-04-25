@@ -30,7 +30,7 @@ def upsert_stages_to_database(stages : list, session, Stages = Stages):
                                         published_date      = stage_dict["published_date"],
                                         end_date            = stage_dict["end_date"],
                                         receiving_feedback  = stage_dict["receiving_feedback"],
-                                        initiative_id       = stage_dict["initiative_id"],
+                                        initiative_id       = stage_dict["initiative_id"]
                                                     )
             
         #print(insert_stmt.inserted)

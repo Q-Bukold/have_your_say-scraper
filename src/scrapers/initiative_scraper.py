@@ -1,4 +1,3 @@
-import pandas as pd
 import requests
 import json
 from json import JSONDecodeError
@@ -7,26 +6,27 @@ import time
 from sqlalchemy import update
 from time import gmtime, strftime
 
-from src.custom_logging import log
-from logging import Logger
+from src.helpers.custom_logging import log
 
 from src.database.database_structure import Stages, Initiatives, SeedList
 from src.database.upsert_initatives import  upsert_initiatives_to_database
 from src.database.upsert_stages import  upsert_stages_to_database
 
-from .hys_portal_scraper import Portal_Scraper
+from ..hys_portal_scraper import Portal_Scraper
 
 class Initiative_Scraper(Portal_Scraper):
-    def __init__(self, connection: str, wait_time: int = 30, session = None, is_test: bool = False) -> None:
-        super().__init__(connection, wait_time, is_test)
+    def __init__(self, connection: str, wait_time: int = 30) -> None:
+        super().__init__(connection, wait_time)
         
-        if session is not None:
-            self.session, engine = session
-        else:
-            self.Session, engine = super().init_database_session()
+
+        self.Session, engine = super().init_database_session()
             
         
     def scrape_all(self) -> dict:
+        """Scrapes all Initatives where `initiative_updated` Value in Seedlist Table is Null"
+
+        """
+
         ids = super().seedlist_get_ids(where="`initiative_updated` is Null")
         log.info(f"Wait Time set to {self.WAIT_TIME} sec.")
         log.info(f"Scraping {len(ids)} Initiatives...")
@@ -37,7 +37,7 @@ class Initiative_Scraper(Portal_Scraper):
         for i, initiative_id in enumerate(ids):                
             try:
                 with self.Session() as sess:
-                    self.scrape_ini(sess, initiative_id)
+                    self.scrape_ini(session_instance=sess, initiative_id=initiative_id)
                 time.sleep(self.WAIT_TIME)
 
             except (JSONDecodeError) as e:
@@ -48,31 +48,37 @@ class Initiative_Scraper(Portal_Scraper):
         log.warn(f"{len(not_found_items)} initatives where not found.")
         return not_found_items
 
-    def scrape_ini(self, sess, initiative_id):
+    def scrape_ini(self, session_instance, initiative_id):
+        """Scrape the Initiative's Metadata and Metadata of all associated Consultations Stages.
+        Saves all data in database.
+        
+        Parameters
+        ----------
+        sess : sqlalchemy session instance
+        
+        initiative_id : str
+            ID of an Initataive
+        """
         # request api data
         url = self.API_INI + str(initiative_id)
         requested_data = requests.get(url, headers=self.HEADER)
         requested_data = requested_data.text
         
-        if self.TEST == True:
-            with open("/Users/qbukold/Heavy_Projects/GitHub/HYS-Portal-Scraper/Portal_Scraper/test_r_data.json") as f:
-                requested_data = json.load(f)
-        else:
-            requested_data = json.loads(requested_data)
+        requested_data = json.loads(requested_data)
 
             
         initiative_data, stage_data = self.filter_ini_r_data(r_dict = requested_data)
         initiative_data["initiative_id"] = initiative_id
                     
         # upsert initative and stage data to database
-        upsert_stages_to_database(stage_data, session=sess, Stages=Stages)
-        upsert_initiatives_to_database(initiative_data, session=sess, Initiatives = Initiatives)
+        upsert_stages_to_database(stage_data, session=session_instance, Stages=Stages)
+        upsert_initiatives_to_database(initiative_data, session=session_instance, Initiatives = Initiatives)
         log.info(f"Success! Updated Database on Initiative: {initiative_id}")
         
         # update seed-list initiative_updated time
-        self.update_seedlist_ini_scrape(session=sess, id=initiative_id)
+        self.update_seedlist_ini_scrape(session=session_instance, id=initiative_id)
         
-        sess.commit()
+        session_instance.commit()
 
     def filter_ini_r_data(self, r_dict : dict) -> dict:
         # 1. filter

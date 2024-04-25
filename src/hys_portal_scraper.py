@@ -1,33 +1,17 @@
 import pandas as pd
 import requests
-import json
-from json import JSONDecodeError
-import time
-import sys
 
-import sqlalchemy
-from sqlalchemy import create_engine, update, engine
+from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
-from sqlalchemy.dialects.mysql import insert
-
-from time import gmtime, strftime
-
-
-from src.custom_logging import log
 
 from src.database.database_structure import Base
 
-from src.database.upsert_initatives import  upsert_initiatives_to_database
-from src.database.upsert_stages import  upsert_stages_to_database
-
 
 class Portal_Scraper():
-    def __init__(self, connection : str, wait_time : int = 30, is_test : bool = False) -> None:
+    def __init__(self, connection : str, wait_time : int = 30) -> None:
         
-        # Initalize Database and
-        # create tables according to classes in src.database.database_structure
+        # Initalize Database and create tables according to classes in src.database.database_structure
         self.DATABASE_CONNECTION = connection
-        
         
         # API Endpoints
         self.API_INI = "https://ec.europa.eu/info/law/better-regulation/brpapi/groupInitiatives/"
@@ -41,28 +25,20 @@ class Portal_Scraper():
         headers = requests.utils.default_headers()
         headers['From'] = 'University of Hildesheim (bukold@uni-hildesheim.de)'
         self.HEADER = headers
-
-    
-        # test mode
-        self.TEST = is_test
-    
-        
+            
     def scrape(self):
         '''
         Scrape from start to beginning with one function
-        
         '''
         
         Session = self.init_database_session()
-        
         # open database session
         with Session() as self.session:
             not_found_items = self.scrape_ini_data()
             self.session.commit()
             
-        #scrape_feedback_data()
-        #scrape_attachment_data()
-    
+            ### todo ###
+                
     def init_database_session(self, create_db : bool = False):
         self.engine = create_engine(self.DATABASE_CONNECTION, echo=False)
         Session = sessionmaker(bind=self.engine)

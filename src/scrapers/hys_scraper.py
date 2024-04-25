@@ -1,4 +1,5 @@
-# the whole script is written by https://github.com/felixrech
+# the whole script is written by https://github.com/felixrech, except:
+# EDIT by QB in Line 70 (commented out self._create_output_folder())
 
 import os
 import re
