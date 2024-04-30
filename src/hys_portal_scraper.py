@@ -3,6 +3,7 @@ import requests
 
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
+from sqlalchemy.dialects import mysql
 
 from src.database.database_structure import Base
 
@@ -25,22 +26,14 @@ class Portal_Scraper():
         headers = requests.utils.default_headers()
         headers['From'] = 'University of Hildesheim (bukold@uni-hildesheim.de)'
         self.HEADER = headers
-            
-    def scrape(self):
-        '''
-        Scrape from start to beginning with one function
-        '''
-        
-        Session = self.init_database_session()
-        # open database session
-        with Session() as self.session:
-            not_found_items = self.scrape_ini_data()
-            self.session.commit()
-            
-            ### todo ###
                 
     def init_database_session(self, create_db : bool = False):
-        self.engine = create_engine(self.DATABASE_CONNECTION, echo=False)
+        self.engine = create_engine(self.DATABASE_CONNECTION, echo=False, pool_pre_ping=True, pool_recycle=1600, connect_args={
+                                                                                        'connect_timeout': 1600
+                                                                                        #'max_execution_time' : 1600,
+                                                                                        #'interactive_timeout' : 1600
+                                                                                        }) #connection timeout in seconds
+        
         Session = sessionmaker(bind=self.engine)
         # Create tables according to classes in src.database.database_structure
         if create_db is True:
@@ -48,6 +41,7 @@ class Portal_Scraper():
             return Session, self.engine
         else:
             return Session, self.engine
+            
             
     def sql_to_df(self, sql : str) -> pd.DataFrame:
         engine = create_engine(self.DATABASE_CONNECTION)
@@ -59,8 +53,8 @@ class Portal_Scraper():
         seedlist = self.sql_to_df(sql)
         return seedlist["initiative_id"]
     
-    def stages_get_ids(self, where : str) -> pd.Series:
-        sql = "SELECT stage_id FROM `stages` WHERE {}".format(where)
+    def stages_get_ids(self) -> pd.Series:
+        sql = "SELECT stage_id FROM `stages` WHERE stages.feedback_updated is Null AND stages.type != 'OPC_LAUNCHED' AND stages.total_feedback != 0"
         seedlist = self.sql_to_df(sql)
         return seedlist["stage_id"]
     
@@ -70,5 +64,3 @@ class Portal_Scraper():
         return seedlist["document_id"]
 
         
-    
-    

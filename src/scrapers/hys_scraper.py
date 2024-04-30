@@ -1,5 +1,6 @@
 # the whole script is written by https://github.com/felixrech, except:
-# EDIT by QB in Line 70 (commented out self._create_output_folder())
+# EDIT by QB in Line 72 (commented out self._create_output_folder())
+# EDIT by QB: Added Header Variable ("header")
 
 import os
 import re
@@ -18,6 +19,7 @@ class HYS_Scraper:
         target_dir: str = None,
         download_attachments: bool = True,
         sleep_time: int = 1,
+        header = None,
     ) -> None:
         """Scraper for the European Commission's 'Have your Say' plattform. Can scrape
         an initiative's feedbacks including file attachments, as well as the overall
@@ -68,6 +70,7 @@ class HYS_Scraper:
 
         # Try to create target directory, if it doesn't exist
         # self._create_output_folder() #commented out by QB
+        self.header = header #added by QB
 
     def scrape(
         self, download_attachments: bool = None, save_dataframes: bool = True
@@ -366,7 +369,7 @@ class HYS_Scraper:
         """
         self._sleep()
 
-        r = requests.get(url)
+        r = requests.get(url, headers=self.header)
         self.last_request = time.time()
 
         if r.status_code != 200:

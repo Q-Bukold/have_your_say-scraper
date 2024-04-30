@@ -38,6 +38,7 @@ class Initiative_Scraper(Portal_Scraper):
             try:
                 with self.Session() as sess:
                     self.scrape_ini(session_instance=sess, initiative_id=initiative_id)
+                self.engine.dispose()
                 time.sleep(self.WAIT_TIME)
 
             except (JSONDecodeError) as e:

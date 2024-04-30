@@ -1,4 +1,5 @@
 from json import JSONDecodeError
+import json
 import time
 import pandas as pd
 from sqlalchemy.dialects.mysql import insert
@@ -6,6 +7,8 @@ from time import gmtime, strftime
 
 from sqlalchemy import update
 from time import gmtime, strftime
+
+from configparser import ConfigParser
 
 from src.helpers.custom_logging import log
 
@@ -21,11 +24,15 @@ class Feedback_Scraper(Portal_Scraper):
         self.stage_id = stage_id
         
         self.Session, self.engine = super().init_database_session()
+        self.engine.dispose()
         self.WAIT_TIME = wait_time
         
+        self.config = ConfigParser()
+
+        
     def scrape_all(self):
-        ids = super().stages_get_ids(where="`feedback_updated` is Null")
-        #ids = [25832044]
+        ids = super().stages_get_ids()  #WHERE stages.feedback_updated is Null AND
+                                        #stages.type != 'OPC_LAUNCHED' AND stages.total_feedback != 0
         
         log.info(f"Wait Time set to {self.WAIT_TIME} sec.")
         if len(ids) > 0:
@@ -37,13 +44,8 @@ class Feedback_Scraper(Portal_Scraper):
         not_found_items = []
         for i, stage_id in enumerate(ids):   
             self.stage_id = str(stage_id)
-            try:
-                with self.Session() as self.sess:
-                    self.scrape_feedback()
-                self.engine.dispose()
-            except (JSONDecodeError) as e:
-                log.warning(f"WARNING: No Data Found for {stage_id}")
-                not_found_items.append(stage_id)
+            self.scrape_feedback()
+            self.engine.dispose()
                 
         
         log.info(f"scraped feedbacks of {i+1}/{len(ids)} Stages [✔️ 🎉✨]\n")
@@ -51,31 +53,46 @@ class Feedback_Scraper(Portal_Scraper):
 
     
     def scrape_feedback(self):
-        hys = HYS_Scraper(publication_id=self.stage_id, sleep_time=self.WAIT_TIME) #scraper already contains sleep timer
+        hys = HYS_Scraper(publication_id=self.stage_id, sleep_time=self.WAIT_TIME, header=self.HEADER) #scraper already contains sleep timer
         size, n_pages = self._determine_nr_of_pages(hys)
         
         log.info(f"Scraping Stage: {self.stage_id}")
 
-        if n_pages > 0:
-            eta = n_pages * self.WAIT_TIME
-            log.info("ETA of Stage-Data {}".format(time.strftime('%H:%M:%S', gmtime(eta))))
-            # scrape one page at a time
-            for page in range(n_pages): # one page are 10 Feedbacks of an stage
-                page_data = hys._scrape_page(page, size=size)
-                page_data = page_data["_embedded"]["feedback"]
-                len_last_page = len(page_data)
-                self._feedbacks_to_db(page_data)
-                self.sess.commit()
-            
-            # update last time of last scrape
-            self._update_seedlist_feedback_scrape()
-            self.sess.commit()
-            log.info(f"Scraped {10 * (n_pages-1) + len_last_page} feedbacks")
-            
-        elif n_pages == 0:
-            log.info(f"No feedbacks found")
-            self._update_seedlist_feedback_scrape()
-            self.sess.commit()
+        try:
+            # loop through all feedback pages of stage
+            if n_pages > 0:
+                eta = n_pages * self.WAIT_TIME
+                log.info("ETA of Stage-Data {}".format(time.strftime('%H:%M:%S', gmtime(eta))))
+                # scrape one page at a time
+                for page in range(n_pages): # one page are 10 Feedbacks of an stage
+                    
+                    start_from_page = self._remember_pageNr(insert_page=None, return_overwritten_value=True)
+                    if start_from_page != None:
+                        page = page + start_from_page
+                        
+                    page_data = hys._scrape_page(page, size=size)
+                    log.info(f"Scraped Page {page+1}/{n_pages}")
+                    page_data = page_data["_embedded"]["feedback"]
+                    len_last_page = len(page_data)
+                    with self.Session() as self.sess:
+                        self._feedbacks_to_db(page_data)
+                        self.sess.commit()
+                # update time of last scrape
+                with self.Session() as self.sess:
+                    self._update_seedlist_feedback_scrape()
+                    self.sess.commit()
+                    self._remember_pageNr(insert_page=None)
+                log.info(f"Scraped {10 * (n_pages-1) + len_last_page} feedbacks")
+                
+            elif n_pages == 0:
+                log.info(f"No feedbacks found")
+                with self.Session() as self.sess:
+                    self._update_seedlist_feedback_scrape()
+                    self.sess.commit()
+                    
+        except (Exception, KeyboardInterrupt) as e:
+            log.error(e)
+            self._remember_pageNr(insert_page=page)
         
                 
     def _determine_nr_of_pages(self, hys):
@@ -85,6 +102,24 @@ class Feedback_Scraper(Portal_Scraper):
         size, n_pages = initial["page"]["size"], initial["page"]["totalPages"]
         
         return size, n_pages
+    
+    def _remember_pageNr(self, insert_page :int = None, return_overwritten_value :bool = False):
+        with open('tmp/config.json', 'r') as f:
+            config = json.load(f)
+        
+        if return_overwritten_value == True:
+            overwritten_value = config['continue_from_page']
+        else:
+            overwritten_value = None
+
+        #edit the data
+        config['continue_from_page'] = insert_page
+
+        #write it back to the file
+        with open('tmp/config.json', 'w') as f:
+            json.dump(config, f)
+        
+        return overwritten_value
     
     
     # to DB
@@ -142,7 +177,7 @@ class Feedback_Scraper(Portal_Scraper):
 
         # is always in feedback        
         d["language"]            = f["language"]
-        d["feedback"]            = f["feedback"]
+        d["feedback"]            = f.get("feedback", None)
         d["date_feedback"]       = f["dateFeedback"]
         d["stage_id"]            = int(self.stage_id)
         

@@ -42,7 +42,7 @@ class Feedbacks(Base):
     country = Column(String(3))
     organization = Column(String(300))
     tr_id = Column(String(250))
-    feedback = Column(Text, nullable=False)  # Text is used for longer string-based data
+    feedback = Column(Text)  # Text is used for longer string-based data
     date_feedback = Column(DateTime)
     is_anonymous = Column(Boolean)
     user_type = Column(String(30))
