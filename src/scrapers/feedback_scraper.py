@@ -77,7 +77,7 @@ class Feedback_Scraper(Portal_Scraper):
                     with self.Session() as self.sess:
                         self._feedbacks_to_db(page_data)
                         self.sess.commit()
-                # update time of last scrape
+                # update time of last scrape 
                 with self.Session() as self.sess:
                     self._update_seedlist_feedback_scrape()
                     self.sess.commit()
