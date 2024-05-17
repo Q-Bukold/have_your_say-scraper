@@ -1,12 +1,15 @@
 from json import JSONDecodeError
 import json
+import pickle
 import time
-import sys
 import pandas as pd
 from sqlalchemy.dialects.mysql import insert
 from time import gmtime, strftime
 
 from sqlalchemy import update
+from time import gmtime, strftime
+
+from configparser import ConfigParser
 
 from src.helpers.custom_logging import log
 
@@ -25,13 +28,10 @@ class Feedback_Scraper(Portal_Scraper):
         self.engine.dispose()
         self.WAIT_TIME = wait_time
         
-        self.current_time = gmtime()
-        self.nr_of_requests = 0
-        self.script_end_time = None
-                
+        self.config = ConfigParser()
+
         
     def scrape_all(self):
-        log.info("gmtime = {}".format(strftime("%Y-%m-%d %H:%M:%S", self.current_time)))
         ids = super().stages_get_ids()  #WHERE stages.feedback_updated is Null AND
                                         #stages.type != 'OPC_LAUNCHED' AND stages.total_feedback != 0
         
@@ -51,104 +51,84 @@ class Feedback_Scraper(Portal_Scraper):
         
         log.info(f"scraped feedbacks of {i+1}/{len(ids)} Stages [✔️ 🎉✨]\n")
         return not_found_items
-
+    
     
     def scrape_feedback(self):
+        log.info(f"Scraping Stage: {self.stage_id}")
         hys = HYS_Scraper(publication_id=self.stage_id, sleep_time=self.WAIT_TIME, header=self.HEADER) #scraper already contains sleep timer
         size, n_pages = self._determine_nr_of_pages(hys)
-        self.nr_of_requests += 1
-        
-        log.info(f"Scraping Stage: {self.stage_id}")
-        
         if n_pages == 0:
             log.info(f"No feedbacks found")
-            with self.Session() as self.sess:
-                self._update_seedlist_feedback_scrape()
-                self.sess.commit()
-
-        # loop through all feedback pages of stage
-        elif n_pages > 0:
+            self._update_seedlist_feedback_scrape()
+        else:
             eta = n_pages * self.WAIT_TIME
             log.info("ETA of Stage-Data {}".format(time.strftime('%H:%M:%S', gmtime(eta))))
-            self._scrape_pages(size, n_pages, hys)
-                
-        return None
+                    
+            try: # loop through all feedback pages of stage
+                for page in range(n_pages): # one page are 10 Feedbacks of an stage
+                    start_from_page = self._remember_pageNr(insert_page=None, return_overwritten_value=True)
+                    if start_from_page != None:
+                        page = page + start_from_page
+                    
+                    # scrape 10 Feedbacks
+                    len_last_page = self._scrape_page(hys, page, size)
+                    log.info(f"Scraped Page {page+1}/{n_pages}")
 
+                # update time of last scrape 
+                self._update_seedlist_feedback_scrape()
+                self._remember_pageNr(insert_page=None) #reset
+                log.info(f"Scraped {10 * (n_pages-1) + len_last_page} feedbacks")
+                                    
+            except (Exception, KeyboardInterrupt) as e:
+                log.error(e)
+                self._remember_pageNr(insert_page=page) # for backup
+    
+    def _scrape_page(self, hys_instance, page, size):
+            
+        page_data = hys_instance._scrape_page(page, size=size)
+        page_data = page_data["_embedded"]["feedback"]
+        len_last_page = len(page_data)
+        
+        self._feedbacks_to_db(page_data)
+        return len_last_page
+                
     def _determine_nr_of_pages(self, hys):
         # Access API to determine default page size and number of pages
-        # -> following two lines taken from HYS-Scraper by felixrech
+        # -> following two lines taken from HYS-Scraper
         initial = hys._scrape_page()
         size, n_pages = initial["page"]["size"], initial["page"]["totalPages"]
         
         return size, n_pages
-
-    def _scrape_pages(self, size, n_pages, hys):
-        # -> following function is inspired from HYS-Scraper by felixrech
-
-        
-        for page in range(self._remember_pageNr(), n_pages): # one page are 10 Feedbacks of an stage
-            try: # scrape one page at a time. Reset from page_nr self._remember_pageNr(), if error occured       
-                page_data = hys._scrape_page(page, size=size)
-                self.nr_of_requests += 1
-                log.info(f"Scraped Page {page+1}/{n_pages}")
-                page_data = page_data["_embedded"]["feedback"]
-                len_last_page = len(page_data)
-                
-                # upsert page to DB
-                with self.Session() as self.sess:
-                    self._feedbacks_to_db(page_data)
-                    self.sess.commit()
-                    
-            except (Exception, KeyboardInterrupt) as e: # in case of error: remember last scraped page  
-                log.error(e)
-                self._remember_pageNr(update_page_nr=page-1)
-                time_delta = time.mktime(gmtime())  -  time.mktime(self.current_time)
-                log.info("Made {x} requests in {time} sec".format(x=self.nr_of_requests,
-                            time=time.strftime("%H:%M:%S", time.gmtime(time_delta))))
-                sys.exit(0)
-        
-        self._remember_pageNr(update_page_nr=n_pages-1)
-        # finished all pages! update time of last scrape 
-        with self.Session() as self.sess:
-            self._update_seedlist_feedback_scrape()
-            self.sess.commit()
-            # reset
-        log.info(f"Scraped {10 * (n_pages-1) + len_last_page} feedbacks\n")
-        self._remember_pageNr(update_page_nr=0)
-        
-        return None #Data upserted to DB
     
-    def _remember_pageNr(self, update_page_nr:int = 0):
-        # reset or re-assign
-        if update_page_nr < 0:
-            update_page_nr = 0
+    def _remember_pageNr(self, insert_page :int = None, return_overwritten_value :bool = False):
+        with open('tmp/config.json', 'r') as f:
+            config = json.load(f)
         
-        key = str(self.stage_id)
-        value = update_page_nr
-        current_value = 0
-        
-        config = json.load(open('tmp/config.json'))
-        
-        # check if status of stage_id already saved
-        if key in config.keys():
-            # get value
-            current_value = config[key]
-            # update value
-            config[key] = update_page_nr
+        if return_overwritten_value == True:
+            overwritten_value = config['continue_from_page']
         else:
-            config[key] = value
-            
-        json.dump(config, open('tmp/config.json', 'w'))
+            overwritten_value = None
 
-        return current_value
-            
+        #edit the data
+        config['continue_from_page'] = insert_page
+
+        #write it back to the file
+        with open('tmp/config.json', 'w') as f:
+            json.dump(config, f)
+        
+        return overwritten_value    
     
     # to DB
+
     def _feedbacks_to_db(self, feedback_page):
-        for feedback in feedback_page:
-            self._upsert_feedbacks_to_database(feedback)
+        with self.Session() as self.sess:
+            for feedback in feedback_page:
+                self._upsert_feedbacks_to_database(feedback)
+            self.sess.commit()
     
-    def _upsert_feedbacks_to_database(self, feedback_dict : dict):
+    def _upsert_feedbacks_to_database(self, feedback_dict : dict, sess = None):
+        if sess != None:
+            self.sess = sess
         '''
         INSERT INTO my_table (id, data) VALUES (%s, %s)
         ON DUPLICATE KEY UPDATE data = VALUES(data), status = %s
@@ -253,7 +233,10 @@ class Feedback_Scraper(Portal_Scraper):
         return None
 
     def _update_seedlist_feedback_scrape(self):
-        update_stmt = update(Stages).where(Stages.stage_id == self.stage_id).values(feedback_updated=strftime("%Y-%m-%d %H:%M:%S", self.current_time))
-        self.sess.execute(update_stmt)
+        with self.Session() as self.sess:
+            current_time = strftime("%Y-%m-%d %H:%M:%S", gmtime())
+            update_stmt = update(Stages).where(Stages.stage_id == self.stage_id).values(feedback_updated=current_time)
+            self.sess.execute(update_stmt)
+            self.sess.commit()
 
         
