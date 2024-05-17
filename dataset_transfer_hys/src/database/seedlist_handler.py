@@ -26,7 +26,8 @@ class SeedList_Handler(Portal_Scraper):
             current_time = strftime("%Y-%m-%d %H:%M:%S", gmtime())
             
             with open(filename) as f:
-                for url in f:
+                for line in f:
+                    url = f.readline()
                     id, name = self._split_url(url)
                     insert_stmt = insert(SeedList).values(initiative_id = id, initiative_name = name, seed_list_updated = current_time)
                     on_duplicate_key_stmt = insert_stmt.on_duplicate_key_update(initiative_name=insert_stmt.inserted.initiative_name,

@@ -1,6 +1,5 @@
 from json import JSONDecodeError
 import json
-import pickle
 import time
 import pandas as pd
 from sqlalchemy.dialects.mysql import insert
@@ -51,46 +50,50 @@ class Feedback_Scraper(Portal_Scraper):
         
         log.info(f"scraped feedbacks of {i+1}/{len(ids)} Stages [✔️ 🎉✨]\n")
         return not_found_items
-    
+
     
     def scrape_feedback(self):
-        log.info(f"Scraping Stage: {self.stage_id}")
         hys = HYS_Scraper(publication_id=self.stage_id, sleep_time=self.WAIT_TIME, header=self.HEADER) #scraper already contains sleep timer
         size, n_pages = self._determine_nr_of_pages(hys)
-        if n_pages == 0:
-            log.info(f"No feedbacks found")
-            self._update_seedlist_feedback_scrape()
-        else:
-            eta = n_pages * self.WAIT_TIME
-            log.info("ETA of Stage-Data {}".format(time.strftime('%H:%M:%S', gmtime(eta))))
-                    
-            try: # loop through all feedback pages of stage
+        
+        log.info(f"Scraping Stage: {self.stage_id}")
+
+        try:
+            # loop through all feedback pages of stage
+            if n_pages > 0:
+                eta = n_pages * self.WAIT_TIME
+                log.info("ETA of Stage-Data {}".format(time.strftime('%H:%M:%S', gmtime(eta))))
+                # scrape one page at a time
                 for page in range(n_pages): # one page are 10 Feedbacks of an stage
+                    
                     start_from_page = self._remember_pageNr(insert_page=None, return_overwritten_value=True)
                     if start_from_page != None:
                         page = page + start_from_page
-                    
-                    # scrape 10 Feedbacks
-                    len_last_page = self._scrape_page(hys, page, size)
+                        
+                    page_data = hys._scrape_page(page, size=size)
                     log.info(f"Scraped Page {page+1}/{n_pages}")
-
+                    page_data = page_data["_embedded"]["feedback"]
+                    len_last_page = len(page_data)
+                    with self.Session() as self.sess:
+                        self._feedbacks_to_db(page_data)
+                        self.sess.commit()
                 # update time of last scrape 
-                self._update_seedlist_feedback_scrape()
-                self._remember_pageNr(insert_page=None) #reset
+                with self.Session() as self.sess:
+                    self._update_seedlist_feedback_scrape()
+                    self.sess.commit()
+                    self._remember_pageNr(insert_page=None)
                 log.info(f"Scraped {10 * (n_pages-1) + len_last_page} feedbacks")
-                                    
-            except (Exception, KeyboardInterrupt) as e:
-                log.error(e)
-                self._remember_pageNr(insert_page=page) # for backup
-    
-    def _scrape_page(self, hys_instance, page, size):
-            
-        page_data = hys_instance._scrape_page(page, size=size)
-        page_data = page_data["_embedded"]["feedback"]
-        len_last_page = len(page_data)
+                
+            elif n_pages == 0:
+                log.info(f"No feedbacks found")
+                with self.Session() as self.sess:
+                    self._update_seedlist_feedback_scrape()
+                    self.sess.commit()
+                    
+        except (Exception, KeyboardInterrupt) as e:
+            log.error(e)
+            self._remember_pageNr(insert_page=page)
         
-        self._feedbacks_to_db(page_data)
-        return len_last_page
                 
     def _determine_nr_of_pages(self, hys):
         # Access API to determine default page size and number of pages
@@ -116,19 +119,15 @@ class Feedback_Scraper(Portal_Scraper):
         with open('tmp/config.json', 'w') as f:
             json.dump(config, f)
         
-        return overwritten_value    
+        return overwritten_value
+    
     
     # to DB
-
     def _feedbacks_to_db(self, feedback_page):
-        with self.Session() as self.sess:
-            for feedback in feedback_page:
-                self._upsert_feedbacks_to_database(feedback)
-            self.sess.commit()
+        for feedback in feedback_page:
+            self._upsert_feedbacks_to_database(feedback)
     
-    def _upsert_feedbacks_to_database(self, feedback_dict : dict, sess = None):
-        if sess != None:
-            self.sess = sess
+    def _upsert_feedbacks_to_database(self, feedback_dict : dict):
         '''
         INSERT INTO my_table (id, data) VALUES (%s, %s)
         ON DUPLICATE KEY UPDATE data = VALUES(data), status = %s
@@ -233,10 +232,8 @@ class Feedback_Scraper(Portal_Scraper):
         return None
 
     def _update_seedlist_feedback_scrape(self):
-        with self.Session() as self.sess:
-            current_time = strftime("%Y-%m-%d %H:%M:%S", gmtime())
-            update_stmt = update(Stages).where(Stages.stage_id == self.stage_id).values(feedback_updated=current_time)
-            self.sess.execute(update_stmt)
-            self.sess.commit()
+        current_time = strftime("%Y-%m-%d %H:%M:%S", gmtime())
+        update_stmt = update(Stages).where(Stages.stage_id == self.stage_id).values(feedback_updated=current_time)
+        self.sess.execute(update_stmt)
 
         
