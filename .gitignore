@@ -1,6 +1,6 @@
 .my_venv
 *.pkl
-
+/archive
 
 # Byte-compiled / optimized / DLL files
 __pycache__/
