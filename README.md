@@ -1,4 +1,6 @@
 # Portal-Scraper_Have_Your_Say
+
+```
 Portal-Scraper/
 ├─ data/
 ├─ src/
@@ -12,7 +14,7 @@ Portal-Scraper/
 ├─ main.py
 ├─ notebook.oy
 ├─ README.md
-
+```
  
 ## Sources
 - Content od pdf_to_txt folder was copied from https://github.com/felixrech/PC-AI_analysis
