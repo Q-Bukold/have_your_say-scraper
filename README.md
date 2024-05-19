@@ -17,5 +17,5 @@ Portal-Scraper/
 ```
  
 ## Sources
-- Content od pdf_to_txt folder was copied from https://github.com/felixrech/PC-AI_analysis
+- Content of pdf_to_txt folder was copied from https://github.com/felixrech/PC-AI_analysis
 - hys_scraper.py in scrapers/ was copied from https://github.com/felixrech/hys_scraper and slightly eddited
