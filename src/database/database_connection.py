@@ -1,9 +1,9 @@
 def database_connection():
-    user = "u546836483_bukold"
-    password = "hysPortal2024!"
-    host = "srv927.hstgr.io"
+    user = "USERNAME"
+    password = "PASSWORD"
+    host = "HOST-IP"
     port = "3306"
-    database = "u546836483_hysPortal"
+    database = "DATABASE_NAME"
     
     return f'mysql+mysqlconnector://{user}:{password}@{host}:{port}/{database}'
 
