@@ -12,7 +12,7 @@ Portal-Scraper/
 ├─ tmp/
 │  ├─ config.json/
 ├─ main.py
-├─ notebook.oy
+├─ notebook.ipynb # good starting point to understand the scripts
 ├─ README.md
 ```
  
