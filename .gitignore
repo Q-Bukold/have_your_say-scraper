@@ -1,7 +1,7 @@
 .my_venv
 *.pkl
 /archive
-database_connection.py
+src/database/database_connection.py
 
 # Byte-compiled / optimized / DLL files
 __pycache__/
