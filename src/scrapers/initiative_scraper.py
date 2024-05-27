@@ -1,9 +1,10 @@
 import requests
 import json
 from json import JSONDecodeError
-import time
+from typing import List
 
 from sqlalchemy import update
+import time
 from time import gmtime, strftime
 
 from src.helpers.custom_logging import log
@@ -101,7 +102,7 @@ class Initiative_Scraper(Portal_Scraper):
         
         return initiative_data, stage_data
         
-    def deNest_topic(self, topics_list : list[str]) -> str:    
+    def deNest_topic(self, topics_list : List[str]) -> str:    
         if len(topics_list) == 1:
             topics_dict = topics_list[0]
             topic = topics_dict.get('label')
