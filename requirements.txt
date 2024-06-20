@@ -2,7 +2,8 @@ requests
 pandas
 numpy
 SQLAlchemy
-mysql-connector-python-rf
+mysql-connector-python
 PyMuPDF
 spacy
 typing
+matplotlib

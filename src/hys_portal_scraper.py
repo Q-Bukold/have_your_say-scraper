@@ -54,7 +54,7 @@ class Portal_Scraper():
         return seedlist["initiative_id"]
     
     def stages_get_ids(self) -> pd.Series:
-        sql = "SELECT stage_id FROM `stages` WHERE stages.feedback_updated is Null AND stages.type != 'OPC_LAUNCHED' AND stages.total_feedback != 0"
+        sql = "SELECT stage_id FROM `stages` WHERE stages.feedback_updated in (Null, '1111-01-01 01:01:01') AND stages.type != 'OPC_LAUNCHED' AND stages.total_feedback != 0"
         seedlist = self.sql_to_df(sql)
         return seedlist["stage_id"]
     

@@ -32,7 +32,7 @@ class Feedback_Scraper(Portal_Scraper):
         
     def scrape_all(self):
         log.info("gmtime = {}".format(strftime("%Y-%m-%d %H:%M:%S", self.current_time)))
-        ids = super().stages_get_ids()  #WHERE stages.feedback_updated is Null AND
+        ids = super().stages_get_ids()  #WHERE stages.feedback_updated in (Null, '1111-01-01 01:01:01') AND
                                         #stages.type != 'OPC_LAUNCHED' AND stages.total_feedback != 0
         
         log.info(f"Wait Time set to {self.WAIT_TIME} sec.")
@@ -54,12 +54,11 @@ class Feedback_Scraper(Portal_Scraper):
 
     
     def scrape_feedback(self):
+        log.info(f"Scraping Stage: {self.stage_id}")
         hys = HYS_Scraper(publication_id=self.stage_id, sleep_time=self.WAIT_TIME, header=self.HEADER) #scraper already contains sleep timer
         size, n_pages = self._determine_nr_of_pages(hys)
         self.nr_of_requests += 1
-        
-        log.info(f"Scraping Stage: {self.stage_id}")
-        
+                
         if n_pages == 0:
             log.info(f"No feedbacks found")
             with self.Session() as self.sess:

@@ -3,7 +3,7 @@
 import re
 import numpy as np
 import pandas as pd
-from fitz.fitz import Page
+from fitz import Page
 from itertools import compress
 from typing import List, Tuple, Dict, Any
 
