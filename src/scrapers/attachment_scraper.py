@@ -29,31 +29,30 @@ class Attachment_Scraper(Portal_Scraper):
         self.document_id = document_id
     
     def scrape_all(self):
-        ids = super().attachments_get_ids(where="`file` is Null")
+        ids = super().attachments_get_ids(where="`content` is Null")
         
         not_found_items = []
         for i, document_id in enumerate(ids):
             log.info(f"Scraping Document with ID {document_id}")
             self.document_id = str(document_id)
             
-            with self.Session() as self.sess:
-                self.scrape_attachments()
+            self.scrape_attachments()
             
             self.engine.dispose()
                 
 
     def scrape_attachments(self):
-
-        url = self.API_ATTACHMENTS + str(self.document_id)
-        print(url)
-        self.TARGET = "tmp/tmp.pdf"
-        self._get_file(url=url)
-        text = self.convert_pdf_to_txt()
-        self._upsert_text_content_to_db(text)
-        time.sleep(self.WAIT_TIME)
-        
-        self._insert_file_url_to_db(url)
-        self.sess.commit()
+        with self.Session() as self.sess:
+            url = self.API_ATTACHMENTS + str(self.document_id)
+            print(url)
+            self.TARGET = "tmp/tmp.pdf"
+            self._get_file(url=url)
+            text = self.convert_pdf_to_txt()
+            self._upsert_text_content_to_db(text)
+            time.sleep(self.WAIT_TIME)
+            
+            self._insert_file_url_to_db(url)
+            self.sess.commit()
 
     # function copied in part from felix rech hys_scraper
     def _get_file(self, url: str) -> None:
