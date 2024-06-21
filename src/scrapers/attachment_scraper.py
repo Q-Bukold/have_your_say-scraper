@@ -39,6 +39,19 @@ class Attachment_Scraper(Portal_Scraper):
             self.scrape_attachments()
             
             self.engine.dispose()
+    
+    def scrape_all_of_stage(self, stage_id):
+        ids = super().attachments_get_ids(where=f"`content` is Null AND `stage_id` = {stage_id}")
+        log.info(f"Scraping Documents of stage ID {stage_id}")
+        
+        not_found_items = []
+        for i, document_id in enumerate(ids):
+            log.info(f"Scraping Document with ID {document_id}")
+            self.document_id = str(document_id)
+            
+            self.scrape_attachments()
+            
+            self.engine.dispose()
                 
 
     def scrape_attachments(self):
